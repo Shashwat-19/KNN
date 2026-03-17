@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive KNN Simulation for Business</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #27ae60;
+            --danger: #e74c3c;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background: #f4f7f6; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1, h2 { color: var(--primary); }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        canvas { background: #fff; border: 2px solid #ddd; border-radius: 8px; cursor: crosshair; width: 100%; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #f8f9fa; }
+        .btn { background: var(--accent); color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .btn:hover { opacity: 0.9; }
+        .legend { display: flex; gap: 15px; margin-bottom: 10px; font-weight: bold; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; color: white; font-size: 0.8em; }
+        .bg-green { background: var(--success); }
+        .bg-red { background: var(--danger); }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>KNN Algorithm Simulation</h1>
+        <p><strong>Business Case:</strong> Predict if a new loan applicant will be <b>Approved</b> or <b>Rejected</b> based on Income and Credit Score.</p>
+        <div class="legend">
+            <span style="color: var(--success)">● Approved</span>
+            <span style="color: var(--danger)">● Rejected</span>
+            <span style="color: #000">★ New Applicant</span>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <div class="card">
+            <h2>1. Visual Map</h2>
+            <p>Click anywhere on the chart to place a <b>New Applicant</b>.</p>
+            <canvas id="knnCanvas" width="400" height="400"></canvas>
+            <div style="margin-top:15px;">
+                <label>Set K Value: </label>
+                <input type="number" id="kValue" value="3" min="1" max="5" style="width: 50px; padding: 5px;">
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>2. Euclidean Math</h2>
+            <div id="results">
+                <p>Place a point to see the distance calculations.</p>
+                <table id="distTable">
+                    <thead>
+                        <tr>
+                            <th>Neighbor</th>
+                            <th>Distance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div id="finalVerdict" style="margin-top: 20px; font-weight: bold; font-size: 1.2em;"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('knnCanvas');
+        const ctx = canvas.getContext('2d');
+        const tableBody = document.getElementById('tableBody');
+        const verdictDiv = document.getElementById('finalVerdict');
+        const kInput = document.getElementById('kValue');
+
+        // Initial Training Data (Scaled to Canvas 400x400)
+        const dataPoints = [
+            { x: 100, y: 300, label: 'Rejected', color: '#e74c3c' },
+            { x: 80, y: 350, label: 'Rejected', color: '#e74c3c' },
+            { x: 300, y: 100, label: 'Approved', color: '#27ae60' },
+            { x: 350, y: 80, label: 'Approved', color: '#27ae60' },
+            { x: 280, y: 150, label: 'Approved', color: '#27ae60' }
+        ];
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Grid Lines
+            ctx.strokeStyle = '#eee';
+            for(let i=0; i<400; i+=50) {
+                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+            }
+
+            // Draw Labels
+            ctx.fillStyle = "#888";
+            ctx.fillText("High Income →", 320, 390);
+            ctx.save();
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText("← High Credit Score", -120, 15);
+            ctx.restore();
+
+            // Draw Training Points
+            dataPoints.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            });
+        }
+
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            draw();
+            // Draw New Applicant (Star)
+            ctx.fillStyle = "#000";
+            ctx.font = "24px serif";
+            ctx.fillText("★", mouseX - 10, mouseY + 10);
+
+            calculateKNN(mouseX, mouseY);
+        });
+
+        function calculateKNN(qx, qy) {
+            const K = parseInt(kInput.value);
+            
+            // 1. Calculate Distances
+            let distances = dataPoints.map(p => {
+                const d = Math.sqrt(Math.pow(qx - p.x, 2) + Math.pow(qy - p.y, 2));
+                return { ...p, dist: d.toFixed(2) };
+            });
+
+            // 2. Sort by Distance
+            distances.sort((a, b) => a.dist - b.dist);
+
+            // 3. Update Table
+            tableBody.innerHTML = "";
+            let votes = { Approved: 0, Rejected: 0 };
+
+            distances.forEach((d, index) => {
+                const isNeighbor = index < K;
+                if(isNeighbor) votes[d.label]++;
+
+                const row = `
+                    <tr style="${isNeighbor ? 'background: #e8f4fd; font-weight: bold;' : 'opacity: 0.5'}">
+                        <td>Neighbor ${index + 1}</td>
+                        <td>${d.dist}</td>
+                        <td><span class="status-badge ${d.label === 'Approved' ? 'bg-green' : 'bg-red'}">${d.label}</span></td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+
+            // 4. Final Verdict
+            const winner = votes.Approved > votes.Rejected ? 'Approved' : 'Rejected';
+            const color = winner === 'Approved' ? '#27ae60' : '#e74c3c';
+            verdictDiv.innerHTML = `Result for K=${K}: <span style="color: ${color}">${winner}</span> (${votes.Approved} vs ${votes.Rejected})`;
+        }
+
+        draw();
+    </script>
+
+    <footer style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #2c3e50, #34495e); color: #ecf0f1; text-align: center; border-radius: 12px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <p style="margin: 0; font-size: 0.95em; line-height: 1.8;">
+            Created by <strong>Smruti Dilip Dabhole</strong><br>
+            Assistant Professor, Department of Computer Science<br>
+            Christ University, Bangalore – Yeshwantpur Campus
+        </p>
+    </footer>
+
+</body>
+</html>
